@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import logging
+
 import arrow
 from bs4 import BeautifulSoup
 import datetime
@@ -9,6 +11,24 @@ import pandas as pd
 from pytz import timezone
 
 ab_timezone = 'Canada/Mountain'
+
+
+OTHER_PLANT_MAPPINGS = {
+    # see https://en.wikipedia.org/wiki/List_of_generating_stations_in_Alberta#Biomass,_biogas_and_waste_heat_recovery
+    'APF Athabasca (AFG1)*': 'biomass',
+    'Brooks Solar (BSC1)': 'solar',
+    'Cancarb Medicine Hat (CCMH)': 'unknown',  # waste heat
+    'DAI1 Daishowa (DAI1)': 'biomass',
+    'Drayton Valley (DV1)': 'biomass',
+    'Gold Creek Facility (GOC1)': 'unknown',  # waste heat
+    'Grande Prairie EcoPower (GPEC)': 'biomass',
+    'NRGreen (NRG3)': 'unknown',
+    'Slave Lake (SLP1)*': 'unknown',
+    'Weldwood #1 (WWD1)*': 'unknown',
+    'Westlock (WST1)': 'unknown',
+    'Weyerhaeuser (WEY1)': 'biomass',
+    'Whitecourt Power (EAGL)': 'biomass'
+}
 
 
 def convert_time_str(ts):
@@ -21,7 +41,8 @@ def convert_time_str(ts):
     return dt_aware
 
 
-def fetch_production(zone_key='CA-AB', session=None, target_datetime=None, logger=None):
+def fetch_production(zone_key='CA-AB', session=None, target_datetime=None,
+                     logger=logging.getLogger(__name__)):
     """Requests the last known production mix (in MW) of a given country
 
     Arguments:
@@ -55,28 +76,55 @@ def fetch_production(zone_key='CA-AB', session=None, target_datetime=None, logge
         raise NotImplementedError('This parser is not yet able to parse past dates')
 
     r = session or requests.session()
-    url = 'http://ets.aeso.ca/ets_web/ip/Market/Reports/CSDReportServlet'
-    response = r.get(url)
+    #url = 'http://ets.aeso.ca/ets_web/ip/Market/Reports/CSDReportServlet'
+    #response = r.get(url)
+    with open('CSDReportServlet.html') as f:
+        responsecontent = f.read()
 
-    soup = BeautifulSoup(response.content, 'html.parser')
+    soup = BeautifulSoup(responsecontent, 'html.parser')
     findtime = soup.find('td', text=re.compile('Last Update')).get_text()
     time_string = findtime.split(':', 1)[1]
     dt = convert_time_str(time_string)
 
-    df_generations = pd.read_html(response.text, match='GENERATION', skiprows=1, index_col=0, header=0)
+    df_generations = pd.read_html(responsecontent, match='GENERATION', skiprows=1, index_col=0, header=0, flavor='html5lib')
     total_net_generation = df_generations[1]['TNG']
     maximum_capability = df_generations[1]['MC']
+
+    production = {
+        'coal': float(total_net_generation['COAL']),
+        'gas': float(total_net_generation['GAS']),
+        'hydro': float(total_net_generation['HYDRO']),
+        'wind': float(total_net_generation['WIND']),
+        #'unknown': float(total_net_generation['OTHER'])
+    }
+
+    print('total other', total_net_generation['OTHER'])
+
+    df_other = pd.read_html(responsecontent, match='BIOMASS AND OTHER',
+                            skiprows=1, index_col=0, header=0,
+                            flavor='html5lib')  # TODO: remove flavor
+    # last table in the HTML should be the "other" table
+    if df_other:
+        df_other = df_other[-1]
+        if df_other.shape[0] != len(OTHER_PLANT_MAPPINGS):
+            logger.warning('HTML has changed, unable to give more details for "other"',
+                           extra={'key': zone_key})
+        else:
+            print(df_other)
+            for plant_name, plant_type in OTHER_PLANT_MAPPINGS.items():
+                if plant_name in df_other['TNG']:
+                    if plant_type in production:
+                        production[plant_type] += df_other['TNG'][plant_name]
+                    else:
+                        production[plant_type] = df_other['TNG'][plant_name]
+                else:
+                    logger.warning('blah')
+            print(df_other['TNG'])
 
     return {
         'datetime': dt,
         'zoneKey': zone_key,
-        'production': {
-            'coal': float(total_net_generation['COAL']),
-            'gas': float(total_net_generation['GAS']),
-            'hydro': float(total_net_generation['HYDRO']),
-            'wind': float(total_net_generation['WIND']),
-            'unknown': float(total_net_generation['OTHER'])
-        },
+        'production': production,
         'capacity': {
             'coal': float(maximum_capability['COAL']),
             'gas': float(maximum_capability['GAS']),
@@ -184,9 +232,11 @@ def isfloat(value):
 if __name__ == '__main__':
     """Main method, never used by the Electricity Map backend, but handy for testing."""
 
+    from pprint import pprint
+
     print('fetch_production() ->')
-    print(fetch_production())
-    print('fetch_price() ->')
-    print(fetch_price())
-    print('fetch_exchange() ->')
-    print(fetch_exchange())
+    pprint(fetch_production())
+    #print('fetch_price() ->')
+    #print(fetch_price())
+    #print('fetch_exchange() ->')
+    #print(fetch_exchange())
