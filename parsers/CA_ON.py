@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from pprint import pprint
 from collections import defaultdict
 import datetime
 
@@ -12,6 +13,8 @@ import pytz
 # The request library is used to fetch content through HTTP
 import requests
 
+import pandas as pd
+
 from bs4 import BeautifulSoup
 
 MAP_GENERATION = {
@@ -23,8 +26,18 @@ MAP_GENERATION = {
     'WIND': 'wind'
 }
 
+PRODUCTION_URL = 'http://reports.ieso.ca/public/GenOutputCapability/PUB_GenOutputCapability_{YYYYMMDD}.xml'
+
 timezone = 'Canada/Eastern'
 tz_obj = pytz.timezone(timezone)
+
+
+def _ieso_get(tag, sought):
+    subtag = tag.find(sought)
+    if subtag:
+        return subtag.text
+    else:
+        return None
 
 
 def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logger=None):
@@ -57,9 +70,99 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logge
       'source': 'mysource.com'
     }
     """
-    if target_datetime:
-        raise NotImplementedError('This parser is not yet able to parse past dates')
-    
+
+    dt = arrow.get(target_datetime).to(tz_obj).replace(hour=0, minute=0, second=0, microsecond=0)
+    # TODO: handle filename logic, timezone in toronto
+    filename = dt.format('YYYYMMDD')
+    """
+
+    r = session or requests.session()
+    url = PRODUCTION_URL.format(YYYYMMDD=filename)
+    response = r.get(url)
+
+    if not response.ok:
+        # Data is generally available for past 3 months. Requesting files older than this
+        # returns an HTTP 404 error.
+        logger.info('CA-ON: failed getting requested data for datetime {} from IESO server'.format(dt))
+        return []"""
+
+    with open('PUB_GenOutputCapability_20190217.xml') as f:
+        txt = f.read()
+
+    #soup = BeautifulSoup(response.text, 'html.parser')
+    soup = BeautifulSoup(txt, 'html.parser')
+    generators = soup.find_all('generator')
+
+    all_productions = []
+    for generator in generators:
+        name = _ieso_get(generator, 'generatorname')
+        fuel = _ieso_get(generator, 'fueltype')
+
+        for output in generator.find_all('output'):
+            all_productions.append({
+                'name': name,
+                'fuel': fuel,
+                'dt': dt.replace(hours=+int(_ieso_get(output, 'hour'))),
+                'production': float(_ieso_get(output, 'energymw'))
+            })
+
+    df = pd.DataFrame(all_productions)
+    print(df)
+
+    by_fuel = df.groupby(['dt', 'fuel']).sum().unstack()
+    print(by_fuel)
+
+    by_fuel_dict = by_fuel['production'].to_dict('index')
+
+    data = [
+        {
+            'datetime': time,
+            'zoneKey': zone_key,
+            'production': {
+                MAP_GENERATION[fuel]: value
+                for fuel, value in productions.items()
+            },
+            'storage': {},
+            'source': 'ieso.ca',
+            }
+        for time, productions in by_fuel_dict.items()
+    ]
+    pprint(data)
+
+    return data
+
+    generator_data = [
+        {
+            'outputs': [
+                {
+                    dt.replace(hours=+int(_ieso_get(output, 'hour'))): float(_ieso_get(output, 'energymw'))
+                }
+                for output in generator.find_all('output')
+            ],
+            'name': _ieso_get(generator, 'generatorname'),
+            'fuel': _ieso_get(generator, 'fueltype')
+        }
+        for generator in generators
+    ]
+
+    fuel_data = {
+        fuel: {}
+        for fuel in MAP_GENERATION.keys()
+    }
+
+    pprint(generator_data)
+    return []
+
+    for output in outputs:
+        hour = int(output.find('hour').text)
+
+        output_dt = dt.replace(hours=+hour)
+
+        mw = output.find('energymw').text
+        print(fuel, hour, output_dt, mw)
+
+    return []
+
     r = session or requests.session()
     url = 'http://www.ieso.ca/-/media/files/ieso/uploaded/chart/generation_fuel_type_multiday.xml?la=en'
     response = r.get(url)
@@ -253,6 +356,7 @@ if __name__ == '__main__':
 
     print('fetch_production() ->')
     print(fetch_production())
+    exit()
     print('fetch_price() ->')
     print(fetch_price())
     print('fetch_exchange("CA-ON", "US-NY") ->')
