@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 
-# TODO: clean up imports
-
-from pprint import pprint
 from collections import defaultdict
 import datetime
-
 import xml.etree.ElementTree as ET
 
 # The arrow library is used to handle datetimes
 import arrow
+
+# BeautifulSoup processes markup, this could be migrated to use xml library
+from bs4 import BeautifulSoup
 
 # pytz gets tzinfo objects
 import pytz
@@ -17,10 +16,14 @@ import pytz
 # The request library is used to fetch content through HTTP
 import requests
 
+# pandas processes tabular data
 import pandas as pd
 
-from bs4 import BeautifulSoup
 
+timezone = 'Canada/Eastern'
+tz_obj = pytz.timezone(timezone)
+
+# fuel types used by IESO
 MAP_GENERATION = {
     'BIOFUEL': 'biomass',
     'GAS': 'gas',
@@ -33,9 +36,6 @@ MAP_GENERATION = {
 PRODUCTION_URL = 'http://reports.ieso.ca/public/GenOutputCapability/PUB_GenOutputCapability_{YYYYMMDD}.xml'
 
 XML_NS_TEXT = '{http://www.theIMO.com/schema}'
-
-timezone = 'Canada/Eastern'
-tz_obj = pytz.timezone(timezone)
 
 
 def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logger=None):
@@ -111,10 +111,8 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logge
     )
 
     df = pd.DataFrame(all_productions)
-    print(df)
 
     by_fuel = df.groupby(['dt', 'fuel']).sum().unstack()
-    print(by_fuel)
 
     by_fuel_dict = by_fuel['production'].to_dict('index')
 
