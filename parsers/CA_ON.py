@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-from collections import defaultdict
-import datetime
 import logging
 import xml.etree.ElementTree as ET
 
