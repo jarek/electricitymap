@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 import datetime
+import logging
 import xml.etree.ElementTree as ET
 
 # The arrow library is used to handle datetimes
@@ -38,7 +39,8 @@ PRODUCTION_URL = 'http://reports.ieso.ca/public/GenOutputCapability/PUB_GenOutpu
 XML_NS_TEXT = '{http://www.theIMO.com/schema}'
 
 
-def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logger=None):
+def fetch_production(zone_key='CA-ON', session=None, target_datetime=None,
+                     logger=logging.getLogger(__name__)):
     """Requests the last known production mix (in MW) of a given country
 
     Arguments:
@@ -70,9 +72,7 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logge
     """
 
     dt = arrow.get(target_datetime).to(tz_obj).replace(hour=0, minute=0, second=0, microsecond=0)
-    # TODO: handle filename logic, timezone in toronto
     filename = dt.format('YYYYMMDD')
-    """
 
     r = session or requests.session()
     url = PRODUCTION_URL.format(YYYYMMDD=filename)
@@ -82,12 +82,9 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logge
         # Data is generally available for past 3 months. Requesting files older than this
         # returns an HTTP 404 error.
         logger.info('CA-ON: failed getting requested data for datetime {} from IESO server'.format(dt))
-        return []"""
+        return []
 
-    with open('PUB_GenOutputCapability_20190217.xml') as f:
-        txt = f.read()
-
-    xml = ET.fromstring(txt)
+    xml = ET.fromstring(response.text)
 
     generators = xml\
         .find(XML_NS_TEXT + 'IMODocBody')\
@@ -185,7 +182,8 @@ def fetch_price(zone_key='CA-ON', session=None, target_datetime=None, logger=Non
     return data
 
 
-def fetch_exchange(zone_key1, zone_key2, session=None, target_datetime=None, logger=None):
+def fetch_exchange(zone_key1, zone_key2, session=None, target_datetime=None,
+                   logger=logging.getLogger(__name__)):
     """Requests the last known power exchange (in MW) between two countries
 
     Arguments:
@@ -291,15 +289,29 @@ def fetch_exchange(zone_key1, zone_key2, session=None, target_datetime=None, log
 if __name__ == '__main__':
     """Main method, never used by the Electricity Map backend, but handy for testing."""
 
+    now = arrow.utcnow()
+
     print('fetch_production() ->')
     print(fetch_production())
+
+    print('we expect correct results when time in UTC and Ontario differs')
+    print('data should be for {}'.format(now.replace(hour=2).to(tz_obj).format('YYYY-MM-DD')))
+    print('fetch_production("CA-ON", target_datetime=now.replace(hour=2)) ->')
+    print(fetch_production("CA-ON", target_datetime=now.replace(hour=2)))
+
+    print('we expect results for 2 months ago')
+    print('fetch_production(target_datetime=now.shift(months=-2).datetime)) ->')
+    print(fetch_production(target_datetime=now.shift(months=-2).datetime))
+
+    print('there are likely no results for 2 years ago')
+    print('fetch_production(target_datetime=now.shift(years=-2).datetime)) ->')
+    print(fetch_production(target_datetime=now.shift(years=-2).datetime))
+
     exit()
     print('fetch_price() ->')
     print(fetch_price())
     print('fetch_exchange("CA-ON", "US-NY") ->')
     print(fetch_exchange("CA-ON", "US-NY"))
-
-    now = arrow.utcnow()
 
     print('fetch_exchange("CA-ON", "CA-QC", target_datetime=now.datetime)) ->')
     print(fetch_exchange("CA-ON", "CA-QC", target_datetime=now.datetime))
