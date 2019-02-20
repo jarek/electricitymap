@@ -134,69 +134,6 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logge
 
     return data
 
-    generator_data = [
-        {
-            'outputs': [
-                {
-                    dt.replace(hours=+int(_ieso_get(output, 'hour'))): float(_ieso_get(output, 'energymw'))
-                }
-                for output in generator.find_all('output')
-            ],
-            'name': _ieso_get(generator, 'generatorname'),
-            'fuel': _ieso_get(generator, 'fueltype')
-        }
-        for generator in generators
-    ]
-
-    fuel_data = {
-        fuel: {}
-        for fuel in MAP_GENERATION.keys()
-    }
-
-    pprint(generator_data)
-    return []
-
-    for output in outputs:
-        hour = int(output.find('hour').text)
-
-        output_dt = dt.replace(hours=+hour)
-
-        mw = output.find('energymw').text
-        print(fuel, hour, output_dt, mw)
-
-    return []
-
-    r = session or requests.session()
-    url = 'http://www.ieso.ca/-/media/files/ieso/uploaded/chart/generation_fuel_type_multiday.xml?la=en'
-    response = r.get(url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-
-    data = {}
-
-    start_datetime = arrow.get(
-        arrow.get(soup.find_all('startdate')[0].contents[0]).datetime, timezone)
-
-    # Iterate over all datasets (production types)
-    for item in soup.find_all('dataset'):
-        key = item.attrs['series']
-        for rowIndex, row in enumerate(item.find_all('value')):
-            if not len(row.contents):
-                continue
-            if rowIndex not in data:
-                data[rowIndex] = {
-                    'datetime': start_datetime.replace(hours=+rowIndex).datetime,
-                    'zoneKey': zone_key,
-                    'production': {
-                        'coal': 0
-                    },
-                    'storage': {},
-                    'source': 'ieso.ca',
-                }
-            data[rowIndex]['production'][MAP_GENERATION[key]] = \
-                float(row.contents[0])
-
-    return [data[k] for k in sorted(data.keys())]
-
 
 def fetch_price(zone_key='CA-ON', session=None, target_datetime=None, logger=None):
     """Requests the last known power price of a given country
