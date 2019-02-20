@@ -98,7 +98,9 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logge
     all_productions = (
         {
             'name': generator.find(XML_NS_TEXT + 'GeneratorName').text,
-            'fuel': generator.find(XML_NS_TEXT + 'FuelType').text,
+            'fuel': MAP_GENERATION[
+                generator.find(XML_NS_TEXT + 'FuelType').text
+            ],
             'dt': dt.replace(hours=+int(
                 output.find(XML_NS_TEXT + 'Hour').text
             )),
@@ -120,13 +122,10 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logge
         {
             'datetime': time,
             'zoneKey': zone_key,
-            'production': {
-                MAP_GENERATION[fuel]: value
-                for fuel, value in productions.items()
-            },
+            'production': productions,
             'storage': {},
             'source': 'ieso.ca',
-            }
+        }
         for time, productions in by_fuel_dict.items()
     ]
 
