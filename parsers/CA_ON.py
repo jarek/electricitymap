@@ -103,7 +103,7 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logge
             ],
             'dt': dt.replace(hours=+int(
                 output.find(XML_NS_TEXT + 'Hour').text
-            )),
+            )).datetime,
             'production': float(
                 output.find(XML_NS_TEXT + 'EnergyMW').text
             )
