@@ -41,16 +41,19 @@ XML_NS_TEXT = '{http://www.theIMO.com/schema}'
 
 def fetch_production(zone_key='CA-ON', session=None, target_datetime=None,
                      logger=logging.getLogger(__name__)):
-    """Requests the last known production mix (in MW) of a given country
+    """Requests the last known production mix (in MW) of a given region
 
     Arguments:
-    zone_key (optional) -- used in case a parser is able to fetch multiple countries
-    session (optional)      -- request session passed in order to re-use an existing session
+    zone_key (optional): ignored here, only information for CA-ON is returned
+    session (optional): request session passed in order to re-use an existing session
+    target_datetime: the datetime for which we want production data. If not provided, we should
+      default it to now. The provided target_datetime is timezone-aware in UTC.
+    logger: an instance of a `logging.Logger`; all raised exceptions are also logged automatically
 
     Return:
-    A dictionary in the form:
+    A list of dictionaries in the form:
     {
-      'zoneKey': 'FR',
+      'zoneKey': 'CA-ON',
       'datetime': '2017-01-01T00:00:00Z',
       'production': {
           'biomass': 0.0,
@@ -315,7 +318,6 @@ if __name__ == '__main__':
     print('fetch_production(target_datetime=now.shift(years=-2).datetime)) ->')
     print(fetch_production(target_datetime=now.shift(years=-2).datetime))
 
-    exit()
     print('fetch_price() ->')
     print(fetch_price())
     print('fetch_exchange("CA-ON", "US-NY") ->')
