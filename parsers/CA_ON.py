@@ -91,6 +91,15 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None,
         .find(XML_NS_TEXT + 'Generators')\
         .findall(XML_NS_TEXT + 'Generator')
 
+    def production_or_zero(output):
+        # Sometimes the XML data has no "EnergyMW" tag for a given plant at a given hour.
+        # The report XSL formats this as "N/A" - we return 0
+        tag = output.find(XML_NS_TEXT + 'EnergyMW')
+        if tag is not None:
+            return tag.text
+        else:
+            return 0
+
     # flat iterable of per-generator-plant productions per time from the XML data
     all_productions = (
         {
@@ -101,9 +110,7 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None,
             'dt': dt.replace(hours=+int(
                 output.find(XML_NS_TEXT + 'Hour').text
             )).datetime,
-            'production': float(
-                output.find(XML_NS_TEXT + 'EnergyMW').text
-            )
+            'production': float(production_or_zero(output))
         }
         for generator in generators
         for output in generator.find(XML_NS_TEXT + 'Outputs').findall(XML_NS_TEXT + 'Output')
@@ -112,6 +119,7 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None,
     df = pd.DataFrame(all_productions)
 
     by_fuel = df.groupby(['dt', 'fuel']).sum().unstack()
+    # to debug, you can `print(by_fuel)` here, which gives a very pretty table
 
     by_fuel_dict = by_fuel['production'].to_dict('index')
 
