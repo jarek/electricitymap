@@ -34,6 +34,24 @@ MAP_GENERATION = {
     'WIND': 'wind'
 }
 
+# exchanges and sub-exchanges used by IESO
+MAP_EXCHANGE = {
+    'MANITOBA': 'CA-MB->CA-ON',
+    'MANITOBA SK': 'CA-MB->CA-ON',
+    'MICHIGAN': 'CA-ON->US-MISO',
+    'MINNESOTA': 'CA-ON->US-MISO',
+    'NEW-YORK': 'CA-ON->US-NY',
+    'PQ.AT': 'CA-ON->CA-QC',
+    'PQ.B5D.B31L': 'CA-ON->CA-QC',
+    'PQ.D4Z': 'CA-ON->CA-QC',
+    'PQ.D5A': 'CA-ON->CA-QC',
+    'PQ.H4Z': 'CA-ON->CA-QC',
+    'PQ.H9A': 'CA-ON->CA-QC',
+    'PQ.P33C': 'CA-ON->CA-QC',
+    'PQ.Q4C': 'CA-ON->CA-QC',
+    'PQ.X2Y': 'CA-ON->CA-QC'
+}
+
 PRODUCTION_URL = 'http://reports.ieso.ca/public/GenOutputCapability/PUB_GenOutputCapability_{YYYYMMDD}.xml'
 EXCHANGES_URL = 'http://reports.ieso.ca/public/IntertieScheduleFlow/PUB_IntertieScheduleFlow_{YYYYMMDD}.xml'
 
@@ -219,35 +237,9 @@ def fetch_exchange(zone_key1, zone_key2, session=None, target_datetime=None,
     }]
     """
 
-    exchange_maps = {
-        'MANITOBA': 'CA-MB->CA-ON',
-        'MANITOBA SK': 'CA-MB->CA-ON',
-        'MICHIGAN': 'CA-ON->US-MISO',
-        'MINNESOTA': 'CA-ON->US-MISO',
-        'NEW-YORK': 'CA-ON->US-NY',
-        'PQ.AT': 'CA-ON->CA-QC',
-        'PQ.B5D.B31L': 'CA-ON->CA-QC',
-        'PQ.D4Z': 'CA-ON->CA-QC',
-        'PQ.D5A': 'CA-ON->CA-QC',
-        'PQ.H4Z': 'CA-ON->CA-QC',
-        'PQ.H9A': 'CA-ON->CA-QC',
-        'PQ.P33C': 'CA-ON->CA-QC',
-        'PQ.Q4C': 'CA-ON->CA-QC',
-        'PQ.X2Y': 'CA-ON->CA-QC'
-    }
-
-    maps_exchange = {
-        'CA-MB->CA-ON': ['MANITOBA', 'MANITOBA SK'],
-        'CA-ON->US-MISO': ['MICHIGAN', 'MINNESOTA'],
-        'CA-ON->US-NY': ['NEW-YORK'],
-        'CA-ON->CA-QC': ['PQ.AT', 'PQ.B5D.B31L', 'PQ.D4Z',
-                         'PQ.D5A', 'PQ.H4Z', 'PQ.H9A',
-                         'PQ.P33C', 'PQ.Q4C', 'PQ.X2Y']
-    }
-
     sorted_zone_keys = '->'.join(sorted([zone_key1, zone_key2]))
 
-    if sorted_zone_keys not in maps_exchange:
+    if sorted_zone_keys not in MAP_EXCHANGE.values():
         raise NotImplementedError('This exchange pair is not implemented')
 
     dt = arrow.get(target_datetime).to(tz_obj).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -293,13 +285,14 @@ def fetch_exchange(zone_key1, zone_key2, session=None, target_datetime=None,
 
     # verify that there haven't been new exchanges or sub-exchanges added
     all_exchange_names = set(df['name'].unique())
-    known_exchange_names = set(name for exch in maps_exchange.values() for name in exch)
+    known_exchange_names = set(MAP_EXCHANGE.keys())
     unknown_exchange_names = all_exchange_names - known_exchange_names
     if unknown_exchange_names:
         logger.warning('CA-ON: unrecognized intertie name(s) {}, please implement!'.format(unknown_exchange_names))
 
     # filter to only the sought exchanges
-    df = df[df['name'].isin(maps_exchange[sorted_zone_keys])]
+    sought_exchanges = [ieso_name for ieso_name, em_name in MAP_EXCHANGE.items() if sorted_zone_keys == em_name]
+    df = df[df['name'].isin(sought_exchanges)]
 
     # in the XML, flow into Ontario is always negative.
     # in EM, for 'CA-MB->CA-ON', flow into Ontario is positive.
@@ -357,7 +350,7 @@ if __name__ == '__main__':
     print('fetch_exchange("CA-ON", "CA-QC", target_datetime=now.datetime)) ->')
     print(fetch_exchange("CA-ON", "CA-QC", target_datetime=now.datetime))
 
-    print('Test Ontario-to-Manitoba, this must be opposite sign from reported IESO values')
+    print('test Ontario-to-Manitoba, this must be opposite sign from reported IESO values')
     print('fetch_exchange("CA-ON", "CA-MB", target_datetime=now.datetime)) ->')
     print(fetch_exchange("CA-ON", "CA-MB", target_datetime=now.datetime))
 
@@ -373,3 +366,7 @@ if __name__ == '__main__':
     print('there are likely no results for 2 years ago')
     print('fetch_exchange("CA-ON", "CA-QC", target_datetime=now.shift(years=-2).datetime)) ->')
     print(fetch_exchange("CA-ON", "CA-QC", target_datetime=now.shift(years=-2).datetime))
+
+    print('requesting an exchange with Nova Scotia should raise exception')
+    print('fetch_exchange("CA-ON", "CA-NS")) ->')
+    print(fetch_exchange("CA-ON", "CA-NS"))
