@@ -170,11 +170,14 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None,
 
 def fetch_price(zone_key='CA-ON', session=None, target_datetime=None,
                 logger=logging.getLogger(__name__)):
-    """Requests the last known power price of a given country
+    """Requests the last known power price per MWh of a given region
 
     Arguments:
-    zone_key (optional) -- used in case a parser is able to fetch multiple countries
-    session (optional)      -- request session passed in order to re-use an existing session
+    zone_key: ignored here, only information for CA-ON is returned
+    session: requests session passed in order to re-use an existing session,
+    target_datetime: the datetime for which we want production data. If not provided, we should
+      default it to now. The provided target_datetime is timezone-aware in UTC.
+    logger: an instance of a `logging.Logger`; all raised exceptions are also logged automatically
 
     Return:
     A dictionary in the form:
