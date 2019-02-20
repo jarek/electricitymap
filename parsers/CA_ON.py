@@ -137,6 +137,7 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None,
 
     df = pd.DataFrame(all_productions)
 
+    # group individual plants using the same fuel together for each time period
     by_fuel = df.groupby(['dt', 'fuel']).sum().unstack()
     # to debug, you can `print(by_fuel)` here, which gives a very pretty table
 
@@ -215,7 +216,7 @@ def fetch_price(zone_key='CA-ON', session=None, target_datetime=None, logger=Non
 
 def fetch_exchange(zone_key1, zone_key2, session=None, target_datetime=None,
                    logger=logging.getLogger(__name__)):
-    """Requests the last known power exchange (in MW) between two countries
+    """Requests the last known power exchange (in MW) between two regions
 
     Arguments:
     zone_key1: the first region code
