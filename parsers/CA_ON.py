@@ -6,9 +6,6 @@ import xml.etree.ElementTree as ET
 # The arrow library is used to handle datetimes
 import arrow
 
-# BeautifulSoup processes markup, this could be migrated to use xml library
-from bs4 import BeautifulSoup
-
 # pytz gets tzinfo objects
 import pytz
 
@@ -110,19 +107,10 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None,
     }
     """
 
-    dt = arrow.get(target_datetime).to(tz_obj).replace(hour=0, minute=0, second=0, microsecond=0)
+    dt, xml = _fetch_ieso_xml(target_datetime, session, logger, PRODUCTION_URL)
 
-    r = session or requests.session()
-    url = PRODUCTION_URL.format(YYYYMMDD=dt.format('YYYYMMDD'))
-    response = r.get(url)
-
-    if not response.ok:
-        # Data is generally available for past 3 months. Requesting files older than this
-        # returns an HTTP 404 error.
-        logger.info('CA-ON: failed getting requested production data for datetime {} from IESO server'.format(dt))
+    if not xml:
         return []
-
-    xml = ET.fromstring(response.text)
 
     generators = xml\
         .find(XML_NS_TEXT + 'IMODocBody')\
@@ -213,7 +201,6 @@ def fetch_price(zone_key='CA-ON', session=None, target_datetime=None,
     data = [
         {
             'datetime': dt.replace(hours=+int(
-                # TODO: should this have -1 like the exchanges?
                 price.find(XML_NS_TEXT + 'Hour').text
             )).datetime,
             'price': float(price.find(XML_NS_TEXT + 'Price').text),
@@ -254,19 +241,10 @@ def fetch_exchange(zone_key1, zone_key2, session=None, target_datetime=None,
     if sorted_zone_keys not in MAP_EXCHANGE.values():
         raise NotImplementedError('This exchange pair is not implemented')
 
-    dt = arrow.get(target_datetime).to(tz_obj).replace(hour=0, minute=0, second=0, microsecond=0)
+    dt, xml = _fetch_ieso_xml(target_datetime, session, logger, EXCHANGES_URL)
 
-    r = session or requests.session()
-    url = EXCHANGES_URL.format(YYYYMMDD=dt.format('YYYYMMDD'))
-    response = r.get(url)
-
-    if not response.ok:
-        # Data is generally available for past 3 months. Requesting files older than this
-        # returns an HTTP 404 error.
-        logger.info('CA-ON: failed getting requested exchange data for datetime {} from IESO server'.format(dt))
+    if not xml:
         return []
-
-    xml = ET.fromstring(response.text)
 
     intertie_zones = xml\
         .find(XML_NS_TEXT + 'IMODocBody')\
