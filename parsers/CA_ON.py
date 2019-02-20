@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 
+# TODO: clean up imports
+
 from pprint import pprint
 from collections import defaultdict
 import datetime
+
+import xml.etree.ElementTree as ET
 
 # The arrow library is used to handle datetimes
 import arrow
@@ -28,16 +32,10 @@ MAP_GENERATION = {
 
 PRODUCTION_URL = 'http://reports.ieso.ca/public/GenOutputCapability/PUB_GenOutputCapability_{YYYYMMDD}.xml'
 
+XML_NS_TEXT = '{http://www.theIMO.com/schema}'
+
 timezone = 'Canada/Eastern'
 tz_obj = pytz.timezone(timezone)
-
-
-def _ieso_get(tag, sought):
-    subtag = tag.find(sought)
-    if subtag:
-        return subtag.text
-    else:
-        return None
 
 
 def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logger=None):
@@ -89,20 +87,27 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logge
     with open('PUB_GenOutputCapability_20190217.xml') as f:
         txt = f.read()
 
-    #soup = BeautifulSoup(response.text, 'html.parser')
-    soup = BeautifulSoup(txt, 'html.parser')
-    generators = soup.find_all('generator')
+    xml = ET.fromstring(txt)
 
-    # generator of per-plant productions per time from the XML data
+    generators = xml\
+        .find(XML_NS_TEXT + 'IMODocBody')\
+        .find(XML_NS_TEXT + 'Generators')\
+        .findall(XML_NS_TEXT + 'Generator')
+
+    # flat iterable of per-generator-plant productions per time from the XML data
     all_productions = (
         {
-            'name': _ieso_get(generator, 'generatorname'),
-            'fuel': _ieso_get(generator, 'fueltype'),
-            'dt': dt.replace(hours=+int(_ieso_get(output, 'hour'))),
-            'production': float(_ieso_get(output, 'energymw'))
+            'name': generator.find(XML_NS_TEXT + 'GeneratorName').text,
+            'fuel': generator.find(XML_NS_TEXT + 'FuelType').text,
+            'dt': dt.replace(hours=+int(
+                output.find(XML_NS_TEXT + 'Hour').text
+            )),
+            'production': float(
+                output.find(XML_NS_TEXT + 'EnergyMW').text
+            )
         }
         for generator in generators
-        for output in generator.find_all('output')
+        for output in generator.find(XML_NS_TEXT + 'Outputs').findall(XML_NS_TEXT + 'Output')
     )
 
     df = pd.DataFrame(all_productions)
@@ -126,7 +131,6 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logge
             }
         for time, productions in by_fuel_dict.items()
     ]
-    pprint(data)
 
     return data
 
