@@ -93,18 +93,17 @@ def fetch_production(zone_key='CA-ON', session=None, target_datetime=None, logge
     soup = BeautifulSoup(txt, 'html.parser')
     generators = soup.find_all('generator')
 
-    all_productions = []
-    for generator in generators:
-        name = _ieso_get(generator, 'generatorname')
-        fuel = _ieso_get(generator, 'fueltype')
-
-        for output in generator.find_all('output'):
-            all_productions.append({
-                'name': name,
-                'fuel': fuel,
-                'dt': dt.replace(hours=+int(_ieso_get(output, 'hour'))),
-                'production': float(_ieso_get(output, 'energymw'))
-            })
+    # generator of per-plant productions per time from the XML data
+    all_productions = (
+        {
+            'name': _ieso_get(generator, 'generatorname'),
+            'fuel': _ieso_get(generator, 'fueltype'),
+            'dt': dt.replace(hours=+int(_ieso_get(output, 'hour'))),
+            'production': float(_ieso_get(output, 'energymw'))
+        }
+        for generator in generators
+        for output in generator.find_all('output')
+    )
 
     df = pd.DataFrame(all_productions)
     print(df)
